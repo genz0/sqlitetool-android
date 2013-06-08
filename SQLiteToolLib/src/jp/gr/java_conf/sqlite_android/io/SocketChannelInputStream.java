@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2013 genzo
+ * Copyright (C) 2013 genz0
  */
 package jp.gr.java_conf.sqlite_android.io;
 

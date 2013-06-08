@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2013 genzo
+ * Copyright (C) 2013 genz0
  */
 package jp.gr.java_conf.sqlite_android.result;
 
@@ -13,12 +13,17 @@ import android.database.Cursor;
 public interface ResultWriter {
 
     /**
-     * 初期化.
-     *
+     * 生成.
+     * 
      * @param socketChannel
      *            出力先
      */
-    void initialize(SocketChannel socketChannel);
+    void create(SocketChannel socketChannel);
+
+    /**
+     * 破棄.
+     */
+    void destroy();
 
     /**
      * ヘッターの編集.
@@ -27,6 +32,16 @@ public interface ResultWriter {
      *            カーソル
      */
     void putHeader(Cursor cursor);
+
+    /**
+     * フッターの編集.
+     * 
+     * @param cursor
+     *            カーソル
+     * 
+     * @param cursor
+     */
+    void putFooter(Cursor cursor);
 
     /**
      * ボディーの編集.
@@ -52,5 +67,7 @@ public interface ResultWriter {
      *            例外
      */
     void putMessage(String message, Throwable t);
+
+
 
 }

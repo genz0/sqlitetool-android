@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2013 genzo
+ * Copyright (C) 2013 genz0
  */
 package jp.gr.java_conf.sqlite_android;
 
@@ -11,6 +11,7 @@ import java.nio.channels.ServerSocketChannel;
 import java.nio.channels.SocketChannel;
 import java.util.Iterator;
 import java.util.Set;
+import java.util.logging.Level;
 
 import jp.gr.java_conf.sqlite_android.result.ResultWriter;
 import jp.gr.java_conf.sqlite_android.result.TSVResultWriter;
@@ -20,7 +21,6 @@ import jp.gr.java_conf.sqlite_android.util.SQLTokenizer;
 import jp.gr.java_conf.sqlite_android.util.StringUtils;
 import android.content.Context;
 import android.database.Cursor;
-import android.database.SQLException;
 import android.database.sqlite.SQLiteDatabase;
 import android.database.sqlite.SQLiteOpenHelper;
 
@@ -39,47 +39,23 @@ public class SQLiteServer implements Runnable {
     private SQLiteOpenHelper mHelper = null;
 
     /**
-     * DBの指定.
+     * 初期化.
      * 
-     * 引数で指定されたファイル名で、SQLiteOpenHelperを生成する。
+     * サーバソケットをオープンし、接続待ちを行う。
      * 
      * @param context
      *            コンテキスト
      * @param dbName
      *            ファイル名
-     */
-    public void setDBName(Context context, String dbName) {
-        mHelper = new SQLiteOpenHelper(context, dbName, null, 1) {
-            @Override
-            public void onCreate(SQLiteDatabase db) {
-            }
-
-            @Override
-            public void onUpgrade(SQLiteDatabase db, int oldVersion,
-                    int newVersion) {
-                // バージョンは気にしない
-            }
-
-            @Override
-            public void onDowngrade(SQLiteDatabase db, int oldVersion,
-                    int newVersion) {
-                // バージョンは気にしない
-            }
-        };
-    }
-
-    /**
-     * 初期化.
-     * 
-     * サーバソケットをオープンし、接続待ちを行う。
-     * 
      * @param port
      *            初期化するポート番号
+     * 
      * @return true:処理成功 false:処理失敗
      * @throws IOException
      *             初期化失敗
      */
-    public boolean initialize(int port) throws IOException {
+    public boolean initialize(Context context, String dbName, int port)
+            throws IOException {
 
         boolean result = true;
 
@@ -88,15 +64,14 @@ public class SQLiteServer implements Runnable {
             return result;
         }
 
+        mHelper = new SQLiteHelper(context, dbName);
+
         // ソケットチャネルを生成・設定
         mServerChannel = ServerSocketChannel.open();
         mServerChannel.socket().setReuseAddress(true);
         mServerChannel.socket().bind(new InetSocketAddress(port));
-        // ノンブロッキングモードに設定
         mServerChannel.configureBlocking(false);
-        // セレクタの生成
         mSelector = Selector.open();
-        // ソケットチャネルをセレクタに登録
         mServerChannel.register(mSelector, SelectionKey.OP_ACCEPT);
 
         return result;
@@ -155,7 +130,7 @@ public class SQLiteServer implements Runnable {
                 }
             }
         } catch (IOException e) {
-            LogUtils.e("Selector#select", e);
+            LogUtils.getLogger().log(Level.SEVERE, "Selector#select", e);
         }
     }
 
@@ -171,7 +146,7 @@ public class SQLiteServer implements Runnable {
      */
     private void onAccept(ServerSocketChannel ssc) throws IOException {
         SocketChannel sc = ssc.accept();
-        sc.configureBlocking(false); // 非同期に変更
+        sc.configureBlocking(false);
 
         // Selector に読み込みを登録
         sc.register(mSelector, SelectionKey.OP_READ);
@@ -194,7 +169,7 @@ public class SQLiteServer implements Runnable {
         ResultWriter editor = new TSVResultWriter();
         try {
 
-            editor.initialize(socketChannel);
+            editor.create(socketChannel);
             db = mHelper.getWritableDatabase();
             db.beginTransaction();
 
@@ -203,12 +178,12 @@ public class SQLiteServer implements Runnable {
             while ((sql = tokenizer.next()) != null) {
 
                 if (StringUtils.isEmpty(sql)) {
-                    // 最後に改行だけみたいなパターンの時
+                    // 改行だけの場合
                     continue;
                 }
 
-                LogUtils.getLogger().info("### execute dql [" + sql + "]");
-                editor.putMessage("\n" + sql);
+                LogUtils.getLogger().info("### execute sql [" + sql + "]");
+                editor.putMessage(sql);
 
                 cursor = db.rawQuery(sql, null);
 
@@ -229,19 +204,21 @@ public class SQLiteServer implements Runnable {
                     hasNext = cursor.moveToNext();
                 }
 
+                // フッター出力
+                editor.putFooter(cursor);
+
                 cursor.close();
             }
 
             // 全部成功したらcommit
             db.setTransactionSuccessful();
 
-        } catch (SQLException e) {
-            editor.putMessage("[sql error!!]", e);
-        } catch (IOException e) {
-            editor.putMessage("[IOError !!]", e);
         } catch (Exception e) {
+            LogUtils.getLogger().log(Level.SEVERE, "[Error !!]", e);
             editor.putMessage("[Error !!]", e);
         } finally {
+            editor.destroy();
+
             if (db != null) {
                 db.endTransaction();
             }
@@ -253,6 +230,48 @@ public class SQLiteServer implements Runnable {
                         "### client disconnect. ->" + socketChannel);
                 IOUtils.close(socketChannel);
             }
+        }
+    }
+
+    /**
+     * バージョン操作しないSQLiteOpenHelper.
+     * 
+     * 以下を何もしないオーバライドとすることで、単純にDB操作だけを行う。
+     * <ul>
+     * <li>onCreate</li>
+     * <li>onUpgrade</li>
+     * <li>onDowngrade</li>
+     * </ul>
+     * 
+     */
+    private static class SQLiteHelper extends SQLiteOpenHelper {
+
+        /**
+         * コンストラクタ.
+         * 
+         * @param context
+         *            コンテキスト
+         * @param dbName
+         *            データベースファイル名
+         */
+        SQLiteHelper(Context context, String dbName) {
+            super(context, dbName, null, 1);
+        }
+
+        @Override
+        public void onCreate(SQLiteDatabase db) {
+            // nop
+        }
+
+        @Override
+        public void onUpgrade(SQLiteDatabase db, int oldVersion, int newVersion) {
+            // バージョンは気にしない
+        }
+
+        @Override
+        public void onDowngrade(SQLiteDatabase db, int oldVersion,
+                int newVersion) {
+            // バージョンは気にしない
         }
     }
 }

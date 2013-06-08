@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2013 genzo
+ * Copyright (C) 2013 genz0
  */
 package jp.gr.java_conf.sqlite_android;
 
@@ -50,35 +50,45 @@ public class SQLiteServerService extends Service {
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
 
-        if (mServer == null) {
+        String dbName = null;
+        int port;
+        int result = super.onStartCommand(intent, flags, startId);
 
+        try {
+            ServiceInfo info = getPackageManager().getServiceInfo(
+                    new ComponentName(this, SQLiteServerService.class),
+                    PackageManager.GET_META_DATA);
+            port = info.metaData.getInt("port_no", 1280);
+            dbName = info.metaData.getString("db_file_name");
+
+            boolean debug = info.metaData.getBoolean("debug", false);
+            LogUtils.getLogger().setLevel(debug ? Level.ALL : Level.WARNING);
+            LogUtils.getLogger().info(
+                    "SQLiteServerService dbName=" + dbName + " portNo=" + port);
+        } catch (NameNotFoundException e) {
+            Log.e(TAG, "server start error !!", e);
+            return result;
+        }
+
+        // dbファイル名は必須
+        if (StringUtils.isEmpty(dbName)) {
+            Log.e(TAG, "SQLiteServerService no set \"db_file_name\"");
+            return result;
+        }
+
+        // 起動済み
+        if (mServer != null) {
+            Log.w(TAG, "SQLiteServerService Started extra");
+            return result;
+        }
+
+        try {
             mServer = new SQLiteServer();
-            try {
-                ServiceInfo info = getPackageManager().getServiceInfo(
-                        new ComponentName(this, SQLiteServerService.class),
-                        PackageManager.GET_META_DATA);
-                int port = info.metaData.getInt("port_no", 1280);
-                String dbName = info.metaData.getString("db_file_name");
-                boolean debug = info.metaData.getBoolean("debug", false);
-                LogUtils.getLogger().setLevel(debug ? Level.ALL : Level.OFF);
-
-                LogUtils.getLogger().info(
-                        "SQLiteServerService dbName=" + dbName + " portNo="
-                                + port);
-
-                if (StringUtils.isEmpty(dbName)) {
-                    Log.e(TAG, "SQLiteServerService no set \"db_file_name\"");
-                    return super.onStartCommand(intent, flags, startId);
-                }
-
-                mServer.initialize(port);
-                mServer.setDBName(this, dbName);
-                mServer.startServer();
-            } catch (IOException e) {
-                Log.e(TAG, "server start error !!", e);
-            } catch (NameNotFoundException e) {
-                Log.e(TAG, "server start error !!", e);
-            }
+            mServer.initialize(this, dbName, port);
+            mServer.startServer();
+            Log.i(TAG, "SQLiteServerService is Started");
+        } catch (IOException e) {
+            Log.e(TAG, "server start error !!", e);
         }
 
         return super.onStartCommand(intent, flags, startId);
