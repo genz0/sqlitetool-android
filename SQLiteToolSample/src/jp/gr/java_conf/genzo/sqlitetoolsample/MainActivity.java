@@ -30,9 +30,9 @@ public class MainActivity extends Activity {
 		MyDBHelper helper = new MyDBHelper(this);
 		SQLiteDatabase db = helper.getReadableDatabase();
 		Cursor cursor = null;
-		String sql = "SELECT id, memo FROM TEST_TABLE";
 
 		try {
+			String sql = "SELECT id, memo FROM TEST_TABLE";
 			cursor = db.rawQuery(sql, null);
 			boolean eof = cursor.moveToFirst();
 			StringBuilder sb = new StringBuilder();
@@ -49,14 +49,8 @@ public class MainActivity extends Activity {
 			if (cursor != null) {
 				cursor.close();
 			}
-
-			if (db != null) {
-				db.close();
-			}
-
-			if (helper != null) {
-				helper.close();
-			}
+			db.close();
+			helper.close();
 		}
 	}
 
@@ -64,23 +58,17 @@ public class MainActivity extends Activity {
 	public void onButtonClick2(View view) {
 		MyDBHelper helper = new MyDBHelper(this);
 		SQLiteDatabase db = helper.getWritableDatabase();
-		String ins_sql = "INSERT INTO TEST_TABLE(memo) VALUES (?);";
 
 		db.beginTransaction();
 		try {
-			db.execSQL(ins_sql, new Object[] { new Date().toString() });
+			String sql = "INSERT INTO TEST_TABLE(memo) VALUES (?);";
+			db.execSQL(sql, new Object[] { new Date().toString() });
 			db.setTransactionSuccessful();
 
 		} finally {
 			db.endTransaction();
-
-			if (db != null) {
-				db.close();
-			}
-
-			if (helper != null) {
-				helper.close();
-			}
+			db.close();
+			helper.close();
 		}
 	}
 

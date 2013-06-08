@@ -6,6 +6,7 @@ package jp.gr.java_conf.sqlite_android.util;
 import java.io.Closeable;
 import java.io.IOException;
 import java.nio.channels.Selector;
+
 import android.database.Cursor;
 import android.database.sqlite.SQLiteDatabase;
 

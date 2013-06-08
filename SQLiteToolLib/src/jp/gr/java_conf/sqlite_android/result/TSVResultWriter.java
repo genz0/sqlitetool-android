@@ -6,7 +6,7 @@ package jp.gr.java_conf.sqlite_android.result;
 import java.io.PrintWriter;
 import java.nio.channels.SocketChannel;
 
-import jp.gr.java_conf.sqlite_android.SocketChannelOutputStream;
+import jp.gr.java_conf.sqlite_android.io.SocketChannelOutputStream;
 import jp.gr.java_conf.sqlite_android.util.LogUtils;
 import android.database.Cursor;
 

@@ -3,7 +3,6 @@
  */
 package jp.gr.java_conf.sqlite_android.util;
 
-
 /**
  * 文字列列用ユーティリティ.
  */
@@ -17,22 +16,24 @@ public final class StringUtils {
 
     /**
      * コンストラクタ.
-     *
+     * 
      * ユーティリティクラスのため、プライベート
      */
     private StringUtils() {
 
     }
 
-
     /**
-     * 文字列(改行付).
+     * 空文字判定.
      * 
-     * @param message
-     *            テキスト
-     * @return 改行付文字列
+     * 空文字を判定する。nullも空文字扱い.
+     * 
+     * @param text
+     *            対象となるテキスト
+     * @return true:空文字 false：空文字ではない
      */
-    public static String addLF(String message) {
-        return message + "\n";
+    public static boolean isEmpty(String text) {
+        return text == null || EMPTY.equals(text);
     }
+
 }

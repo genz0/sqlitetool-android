@@ -7,15 +7,14 @@ import java.util.Collections;
 import java.util.HashSet;
 import java.util.Set;
 
-
 /**
- * バイト列用ユーティリティ.
+ * コレクション用ユーティリティ.
  */
 public final class CollectionUtils {
 
     /**
      * コンストラクタ.
-     *
+     * 
      * ユーティリティクラスのため、プライベート
      */
     private CollectionUtils() {
@@ -40,6 +39,5 @@ public final class CollectionUtils {
         }
         return Collections.unmodifiableSet(result);
     }
-
 
 }

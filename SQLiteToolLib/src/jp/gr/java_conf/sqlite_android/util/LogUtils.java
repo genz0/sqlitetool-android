@@ -10,7 +10,6 @@ import java.util.logging.Logger;
 import java.util.logging.SimpleFormatter;
 
 import jp.gr.java_conf.sqlite_android.BuildConfig;
-
 import android.os.Environment;
 import android.util.Log;
 

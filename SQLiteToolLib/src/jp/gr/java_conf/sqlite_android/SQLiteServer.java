@@ -4,9 +4,6 @@
 package jp.gr.java_conf.sqlite_android;
 
 import java.io.IOException;
-import java.io.InputStreamReader;
-import java.io.Reader;
-import java.io.UnsupportedEncodingException;
 import java.net.InetSocketAddress;
 import java.nio.channels.SelectionKey;
 import java.nio.channels.Selector;
@@ -17,9 +14,9 @@ import java.util.Set;
 
 import jp.gr.java_conf.sqlite_android.result.ResultWriter;
 import jp.gr.java_conf.sqlite_android.result.TSVResultWriter;
-import jp.gr.java_conf.sqlite_android.util.CollectionUtils;
 import jp.gr.java_conf.sqlite_android.util.IOUtils;
 import jp.gr.java_conf.sqlite_android.util.LogUtils;
+import jp.gr.java_conf.sqlite_android.util.SQLTokenizer;
 import jp.gr.java_conf.sqlite_android.util.StringUtils;
 import android.content.Context;
 import android.database.Cursor;
@@ -28,9 +25,9 @@ import android.database.sqlite.SQLiteDatabase;
 import android.database.sqlite.SQLiteOpenHelper;
 
 /**
- * クラインとと通信するクラス.
- *
- * いったん接続すると、切断されるまで回線を維持し続ける。
+ * クライアントと通信するクラス.
+ * 
+ * 回線の接続を維持する常時接続型のサーバ機能。
  */
 public class SQLiteServer implements Runnable {
 
@@ -43,9 +40,9 @@ public class SQLiteServer implements Runnable {
 
     /**
      * DBの指定.
-     *
+     * 
      * 引数で指定されたファイル名で、SQLiteOpenHelperを生成する。
-     *
+     * 
      * @param context
      *            コンテキスト
      * @param dbName
@@ -73,9 +70,9 @@ public class SQLiteServer implements Runnable {
 
     /**
      * 初期化.
-     *
+     * 
      * サーバソケットをオープンし、接続待ちを行う。
-     *
+     * 
      * @param port
      *            初期化するポート番号
      * @return true:処理成功 false:処理失敗
@@ -126,7 +123,7 @@ public class SQLiteServer implements Runnable {
 
     /*
      * (非 Javadoc)
-     *
+     * 
      * @see java.lang.Runnable#run()
      */
     @Override
@@ -164,9 +161,9 @@ public class SQLiteServer implements Runnable {
 
     /**
      * Accept.
-     *
+     * 
      * ノンブロッキング指定とRead指定
-     *
+     * 
      * @param ssc
      *            ServerSocketChannel
      * @throws IOException
@@ -183,9 +180,9 @@ public class SQLiteServer implements Runnable {
 
     /**
      * データ受信.
-     *
+     * 
      * 接続のあったチャネルより情報を読み込む
-     *
+     * 
      * @param socketChannel
      *            SocketChannel
      */
@@ -205,7 +202,7 @@ public class SQLiteServer implements Runnable {
 
             while ((sql = tokenizer.next()) != null) {
 
-                if (StringUtils.EMPTY.equals(sql)) {
+                if (StringUtils.isEmpty(sql)) {
                     // 最後に改行だけみたいなパターンの時
                     continue;
                 }
@@ -238,7 +235,6 @@ public class SQLiteServer implements Runnable {
             // 全部成功したらcommit
             db.setTransactionSuccessful();
 
-
         } catch (SQLException e) {
             editor.putMessage("[sql error!!]", e);
         } catch (IOException e) {
@@ -257,118 +253,6 @@ public class SQLiteServer implements Runnable {
                         "### client disconnect. ->" + socketChannel);
                 IOUtils.close(socketChannel);
             }
-
         }
     }
-
-    class SQLTokenizer {
-
-        private Reader mInput = null;
-        private boolean mIsExit = true;
-
-        SQLTokenizer(SocketChannel socketChannel) {
-            try {
-                mInput = new InputStreamReader(new SocketChannelInputStream(
-                        socketChannel), StringUtils.ENCODE);
-            } catch (UnsupportedEncodingException e) {
-                ;// 絶対に来ない
-            }
-        }
-
-        String next() throws IOException {
-            int input = -1;
-            State state = NormalState.state();
-            StringBuffer sb = new StringBuffer();
-            while ((input = mInput.read()) != -1) {
-
-                state = state.put(sb, (char) input);
-                if (state == null) {
-                    break;
-                }
-            }
-
-            String result = null;
-            boolean eof = (input == -1) && (sb.length() == 0);
-            if (!eof) {
-                result = new String(sb);
-                mIsExit = false;
-            }
-
-            return result;
-        }
-
-        public boolean isExit() {
-            return mIsExit;
-        }
-
-    }
-
-    interface State {
-        char QUOTE = '\'';
-        char EOL = ';';
-
-        State put(StringBuffer sb, char input);
-
-    }
-
-    static class NormalState implements State {
-        static final NormalState STATE = new NormalState();
-        static final Set<Character> PRE_IGNORE = CollectionUtils.newSet('\n',
-                '\r', ' ', ';');
-
-        @Override
-        public State put(StringBuffer sb, char input) {
-
-            if (sb.length() > 0 || !PRE_IGNORE.contains(input)) {
-                // 先頭にあるホワイトスペース及び改行を無視する
-                sb.append(input);
-            }
-
-            if (input == QUOTE) {
-                return QuoteState.state();
-            }
-            if (input == EOL) {
-                // 一行分の編集終了
-                return null;
-            }
-            return this;
-        }
-
-        static State state() {
-            return STATE;
-        }
-    }
-
-    static class QuoteState implements State {
-        private static final QuoteState STATE = new QuoteState();
-
-        private char mPreInput = Character.MIN_VALUE;
-
-        @Override
-        public State put(StringBuffer sb, char input) {
-            sb.append(input);
-
-            if (mPreInput == QUOTE) {
-                // 2こ続きならリセットしてQUOTEモードのまま
-                mPreInput = Character.MIN_VALUE;
-                return this;
-            }
-            mPreInput = input;
-
-            if (input == QUOTE) {
-                // QUOTEモード終了
-                return NormalState.state();
-            }
-
-            // EOLが来てもQuoteのまま
-            return this;
-        }
-
-        static State state() {
-            STATE.mPreInput = Character.MIN_VALUE;
-            return STATE;
-        }
-
-    }
-
 }

@@ -1,9 +1,9 @@
 package jp.gr.java_conf.genzo.sqlitetoolsample;
 
-import java.io.IOException;
-
-import jp.gr.java_conf.sqlite_android.SQLiteServer;
+import jp.gr.java_conf.sqlite_android.SQLiteServerService;
 import android.app.Application;
+import android.content.Intent;
+import android.util.Log;
 
 public class MainApplication extends Application {
 
@@ -13,14 +13,8 @@ public class MainApplication extends Application {
 
 		// アプリケーション生成のタイミングで、サービスを起動する。
 		if (BuildConfig.DEBUG) {
-			try {
-				SQLiteServer server = new SQLiteServer();
-				server.initialize(1280);
-				server.setDBName(this, "TestDB.db");
-				server.startServer();
-			} catch (IOException e) {
-				e.printStackTrace();
-			}
+			Log.d("SQLiteToolSample", "started SQLiteServer!!");
+			startService(new Intent(this, SQLiteServerService.class));
 		}
 
 	}

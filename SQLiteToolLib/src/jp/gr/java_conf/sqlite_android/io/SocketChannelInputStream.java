@@ -1,7 +1,7 @@
 /*
  * Copyright (C) 2013 genzo
  */
-package jp.gr.java_conf.sqlite_android;
+package jp.gr.java_conf.sqlite_android.io;
 
 import java.io.IOException;
 import java.io.InputStream;
