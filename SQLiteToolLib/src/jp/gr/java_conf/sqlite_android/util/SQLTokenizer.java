@@ -8,7 +8,6 @@ import java.io.InputStreamReader;
 import java.io.Reader;
 import java.io.UnsupportedEncodingException;
 import java.nio.channels.SocketChannel;
-import java.util.Set;
 
 import jp.gr.java_conf.sqlite_android.io.SocketChannelInputStream;
 
@@ -22,8 +21,19 @@ import jp.gr.java_conf.sqlite_android.io.SocketChannelInputStream;
  * 
  */
 public class SQLTokenizer {
+    /** クオート. */
+    private static final char QUOTE = '\'';
+    /** セミコロン. */
+    private static final char SEM = ';';
+    /** CR. */
+    private static final char CR = '\n';
+    /** LF. */
+    private static final char LF = '\r';
+    /** LF. */
+    private static final char SPACE = ' ';
+
     /** リーダー. */
-    private Reader mInput = null;
+    private Reader mInput;
     /** 終了判定フラグ. */
     private boolean mIsExit = true;
 
@@ -42,6 +52,7 @@ public class SQLTokenizer {
         } catch (UnsupportedEncodingException e) {
             ;// 絶対に来ない
         }
+
     }
 
     /**
@@ -57,9 +68,28 @@ public class SQLTokenizer {
         int input = -1;
         State state = QueryState.Init;
         StringBuffer sb = new StringBuffer();
-        while ((input = mInput.read()) != -1) {
 
-            state = state.put(sb, (char) input);
+        // ステートマシンでのループ処理
+        while ((input = mInput.read()) != -1) {
+            switch (input) {
+            case QUOTE:
+                state = state.quote(sb, (char) input);
+                break;
+            case SEM:
+                state = state.sem(sb, (char) input);
+                break;
+            case CR:
+            case LF:
+                state = state.crlf(sb, (char) input);
+                break;
+            case SPACE:
+                state = state.space(sb, (char) input);
+                break;
+            default:
+                state = state.put(sb, (char) input);
+                break;
+            }
+
             if (state == QueryState.Finsh) {
                 break;
             }
@@ -94,15 +124,57 @@ public class SQLTokenizer {
     interface State {
 
         /**
-         * 文字列編集.
-         * 
-         * 引数 input に指定された文字をどのようにするか.
+         * quoteの処理.
          * 
          * @param sb
          *            編集する文字列バッファ.
          * @param input
          *            入力文字
-         * @return 次の状態へのステータス
+         * @return 次の状態
+         */
+        State quote(StringBuffer sb, char input);
+
+        /**
+         * セミコロンの処理.
+         * 
+         * @param sb
+         *            編集する文字列バッファ.
+         * @param input
+         *            入力文字
+         * @return 次の状態
+         */
+        State sem(StringBuffer sb, char input);
+
+        /**
+         * crlfの処理.
+         * 
+         * @param sb
+         *            編集する文字列バッファ.
+         * @param input
+         *            入力文字
+         * @return 次の状態
+         */
+        State crlf(StringBuffer sb, char input);
+
+        /**
+         * spaceの処理.
+         * 
+         * @param sb
+         *            編集する文字列バッファ.
+         * @param input
+         *            入力文字
+         * @return 次の状態
+         */
+        State space(StringBuffer sb, char input);
+
+        /**
+         * その他の処理.
+         * 
+         * @param sb
+         *            編集する文字列バッファ.
+         * @param input
+         *            入力文字
+         * @return 次の状態
          */
         State put(StringBuffer sb, char input);
 
@@ -119,78 +191,81 @@ public class SQLTokenizer {
         /** 初期状態. */
         Init {
             @Override
+            public State sem(StringBuffer sb, char input) {
+                // 無視
+                return this;
+            }
+
+            @Override
+            public State crlf(StringBuffer sb, char input) {
+                // 無視
+                return this;
+            }
+
+            @Override
+            public State space(StringBuffer sb, char input) {
+                // 無視
+                return this;
+            }
+            @Override
             public State put(StringBuffer sb, char input) {
-                // 先頭にあるホワイトスペース及び改行を無視する
-                if (sb.length() == 0 && PRE_IGNORE.contains(input)) {
-                    return this;
-                }
-                sb.append(input);
-                // それ以外が来たときはノーマルステータスへ
+                super.put(sb, input);
                 return Normal;
             }
 
         },
 
         /** 通常状態. */
-        Normal {
-            @Override
-            public State put(StringBuffer sb, char input) {
-                sb.append(input);
-                switch (input) {
-                case QUOTE:
-                    return Quoat;
-                case EOL:
-                    // 一行分の編集終了
-                    return Finsh;
-                default:
-                    // 以外はステータスを変えない
-                    return this;
-                }
-            }
-        },
+        Normal,
 
         /** クオート状態. */
         Quoat {
             @Override
-            public State put(StringBuffer sb, char input) {
-                sb.append(input);
-                switch (input) {
-                case QUOTE:
-                    // 閉じられたのでノーマルへ
-                    return Normal;
-                default:
-                    // 以外はステータスを変えない
-                    return this;
-                }
+            public State quote(StringBuffer sb, char input) {
+                super.quote(sb, input);
+                // 閉じられたのでノーマルへ
+                return Normal;
+            }
+
+            @Override
+            public State sem(StringBuffer sb, char input) {
+                super.quote(sb, input);
+                // セミコロンが来ても状態を変えない
+                return this;
             }
         },
 
         /** 終了状態. */
-        Finsh {
-            @Override
-            public State put(StringBuffer sb, char input) {
-                return Finsh;
-            }
-        };
+        Finsh;
 
-        /** クオート. */
-        private static final char QUOTE = '\'';
+        @Override
+        public State put(StringBuffer sb, char input) {
+            sb.append(input);
+            return this;
+        }
 
-        /** EOL. */
-        private static final char EOL = ';';
+        @Override
+        public State quote(StringBuffer sb, char input) {
+            sb.append(input);
+            return Quoat;
+        }
 
-        /**
-         * 無視する文字.
-         * 
-         * 通常モードでは、以下は無視する.
-         * <ul>
-         * <li>改行(0x0d or 0x0a)</li>
-         * <li>スペース(0x20)</li>
-         * <li>セミコロン(0x3b)</li>
-         * </ul>
-         * 
-         */
-        private static final Set<Character> PRE_IGNORE = CollectionUtils
-                .newSet('\n', '\r', ' ', ';');
+        @Override
+        public State crlf(StringBuffer sb, char input) {
+            sb.append(input);
+            return this;
+        }
+
+        @Override
+        public State space(StringBuffer sb, char input) {
+            sb.append(input);
+            return this;
+        }
+
+        @Override
+        public State sem(StringBuffer sb, char input) {
+            sb.append(input);
+            return Finsh;
+        }
     }
 }
